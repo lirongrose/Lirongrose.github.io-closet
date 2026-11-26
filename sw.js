@@ -1,5 +1,5 @@
 /* 衣物收纳管家 - 离线缓存。整个程序是单文件 HTML，缓存它即可离线使用 */
-var CACHE = 'closet-v1';
+var CACHE = 'closet-v2';
 var ASSETS = ['./', './index.html', './manifest.webmanifest', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', function (e) {

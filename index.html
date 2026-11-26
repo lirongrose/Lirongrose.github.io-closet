@@ -204,7 +204,7 @@ input[type=range]{accent-color:var(--ac)}
     <h4 style="margin:0 0 6px;font-size:14px">怎么用</h4>
     <div class="hint">
       1. 衣柜页点「上传照片/衣柜设置」→ 拍照或选照片；已有照片可直接用顶部编辑工具条。<br>
-      2. 编辑工具条：<b>选中/改形状</b>=点格子后拖红圆点微调（可改名/删除）；<b>画格子</b>=沿隔板点几个点画任意斜边格；<b>分割</b>=在格子上拖线切成两块；<b>合并</b>=点一个格子，相邻格子会亮起，再点几个（至少两个）→「合并选中」。改完点「收纳」回到正常模式。<br>
+      2. 编辑工具条：<b>选中/改形状</b>=点格子后拖红圆点微调（可改名/删除）；<b>画格子</b>=沿隔板点几个点画任意斜边格；<b>分割</b>=在格子上拖线切成两块；<b>合并</b>=点一个格子，相邻格子会亮起，再点几个（至少两个）→「合并选中」。<b>删除分割线</b>=在任一编辑模式下，点那条红色虚线即可删掉它、两格恢复成一格（也可用「合并」把两格并回去）。改完点「收纳」回到正常模式。<br>
       3. 右下角 + → 拍摄/选择衣物照片，填名称品类季节。<br>
       4. 「衣柜」页点衣物拎出，再点柜格放入；点衣物详情可取出（自穿/借出/清洗）或放回。<br>
       5. 看细节：<b>双指捏合</b>以手指为中心放大缩小，<b>单指拖动</b>把某个角落拖到屏幕中间再看；也可点「＋放大 / －缩小 / 适应屏幕」。放大后仍可直接画格子。<br>
@@ -444,12 +444,12 @@ function buildWard(){
   st.style.display='block';$('wardEmpty').classList.add('hidden');
   img.src=w.src;
   // 编辑模式提示条
-  $('barMsg').textContent = EM==='select' ? '编辑：点格子选中，拖红色圆点微调形状'
+  $('barMsg').textContent = EM==='select' ? '编辑：点格子选中，拖红点微调形状；点红色虚线可删分割'
     : EM==='poly' ? '编辑：沿隔板依次点 3 个以上点，画完点「完成形状」'
-    : EM==='pen' ? '编辑：在格子上按住拖一条线，把它切成两块'
-    : EM==='eraser' ? (UI.mergeSet.length? '已选 '+UI.mergeSet.length+' 格：点相邻格子继续加入，或点「合并选中」' : '编辑：点一个格子，相邻格子会亮起，再点几个一起合并')
+    : EM==='pen' ? '编辑：拖线切成两块；点红色虚线可删掉这条分割'
+    : EM==='eraser' ? (UI.mergeSet.length? '已选 '+UI.mergeSet.length+' 格：点相邻格子继续加入，或点「合并选中」' : '编辑：点一个格子选中相邻格再合并；点红色虚线可直接删分割')
     : '点衣物卡片即可拎出来，再点柜格放入';
-  // 分割线（红色虚线，供橡皮擦除）
+  // 分割线（红色虚线，纯显示；可点删除的热区在所有格子画完后再放到最上层）
   allNodes(w.regions).forEach(function(n){
     if(!n.splitLine)return;
     var a=n.splitLine[0],b=n.splitLine[1],ln=document.createElementNS('http://www.w3.org/2000/svg','line');
@@ -504,6 +504,21 @@ function buildWard(){
       c.style.cursor='move';
       c.addEventListener('pointerdown',function(e){e.stopPropagation();UI.dragVertex={id:sr.id,idx:i};try{svg.setPointerCapture(e.pointerId)}catch(x){}});
       svg.appendChild(c);
+    });
+  }
+  // 分割线可点删除的热区：放在最上层，避免被格子盖住点不到
+  if(EM!=='off'){
+    allNodes(w.regions).forEach(function(n){
+      if(!n.splitLine)return;
+      var a=n.splitLine[0],b=n.splitLine[1];
+      var hit=document.createElementNS('http://www.w3.org/2000/svg','line');
+      hit.setAttribute('x1',a[0]*1000);hit.setAttribute('y1',a[1]*1000);hit.setAttribute('x2',b[0]*1000);hit.setAttribute('y2',b[1]*1000);
+      hit.setAttribute('stroke','transparent');hit.setAttribute('stroke-width','42');
+      hit.setAttribute('pointer-events','stroke');hit.style.cursor='pointer';
+      hit.addEventListener('pointerdown',function(e){e.stopPropagation()});
+      hit.addEventListener('pointerup',function(e){e.stopPropagation()});
+      hit.onclick=function(e){e.stopPropagation();removeSplitLine(n.id)};
+      svg.appendChild(hit);
     });
   }
   // 编辑模式的画布级指针交互（拖顶点 / 画笔分割 / 橡皮合并 / 画多边形）
@@ -711,6 +726,29 @@ function setEditMode(m){
   // poly 模式加"完成形状/取消"操作按钮到工具条
   updateEditTools();buildWard()
 }
+/* 删除一条分割线：把被切开的格子恢复成一个完整格子 */
+function removeSplitLine(nid){
+  var w=curWard();if(!w)return;
+  var n=findNode(nid,w.regions);
+  if(!n||!n.splitLine)return;
+  var kids={};leaves([n]).forEach(function(c){kids[c.id]=1});
+  S.items.forEach(function(i){if(i.location&&i.location.wardrobe===w.id&&kids[i.location.region])i.location.region=nid});
+  n.children=null;n.splitLine=null;
+  UI.mergeSet=[];UI.selectedRid=null;
+  save();buildWard();toast('分割线已删除，格子恢复完整');
+}
+/* 合并后清理：children 不足 2 的分割父节点会残留，压平并清掉 splitLine */
+function pruneNodes(arr){
+  for(var k=arr.length-1;k>=0;k--){
+    var n=arr[k];
+    if(n.children){
+      pruneNodes(n.children);
+      if(n.children.length>=2)continue;
+      if(n.children.length===1)arr[k]=n.children[0];
+      else arr.splice(k,1);
+    }
+  }
+}
 /* 合并选中的相邻格子：取外轮廓，重建为一个格子 */
 function doMerge(){
   var w=curWard(),ids=UI.mergeSet.slice();
@@ -723,6 +761,7 @@ function doMerge(){
     function rm(arr,set){for(var k=arr.length-1;k>=0;k--){if(set[arr[k].id]){arr.splice(k,1);continue}if(arr[k].children)rm(arr[k].children,set)}}
     var set={};ids.forEach(function(id){set[id]=1});ids.forEach(function(id){S.items.forEach(function(i){if(i.location&&i.location.wardrobe===w.id&&set[i.location.region])i.location.region=ids[0]})});
     rm(w.regions,set);
+    pruneNodes(w.regions);
     w.regions.push({id:ids[0],name:name,points:merged,children:null,splitLine:null});
     UI.mergeSet=[];save();buildWard();toast('已合并 '+picked.length+' 个格子')
   }})
